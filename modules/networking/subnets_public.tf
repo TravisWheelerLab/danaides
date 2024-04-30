@@ -25,9 +25,9 @@ resource "aws_subnet" "public" {
 #------------------------------------------------------------------------------
 # Elastic IPs for NAT
 resource "aws_eip" "nat" {
-  for_each = var.single_nat ? { keys(aws_subet.public)[0] = values(aws_subnet.public)[0] } : aws_subnet.public
+  for_each = var.single_nat ? { keys(aws_subnet.public)[0] = values(aws_subnet.public)[0] } : aws_subnet.public
 
-  domain = "vpc"
+  # domain = "vpc"
 
   tags = merge(
     var.additional_tags,
