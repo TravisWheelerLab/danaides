@@ -1,21 +1,5 @@
-terraform {
-    required_providers {
-      aws = {
-        source = "hashicorp/aws"
-        version = "~> 4.16"
-      }
-    }
-
-    required_version = ">= 1.2.0"
-}
-
-provider "aws" {
-  profile = "dev"
-  region = "us-east-1"
-}
-
 module "base-network" {
-  source = "./modules/networking"
+  source = "./modules/network"
 
   cidr_block = "192.168.0.0/16"
 

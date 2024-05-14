@@ -3,3 +3,4 @@
 .terraform*
 terraform.tfstate
 danaides.code-workspace
+terraform.tfstate*
