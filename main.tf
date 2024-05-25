@@ -10,11 +10,11 @@ module "base-network" {
 
   public_subnets = {
     first_public_subnet = {
-      availability_zone = "us-east-1a"
+      availability_zone = "us-west-2a"
       cidr_block        = "192.168.0.0/19"
     }
     second_public_subnet = {
-      availability_zone = "us-east-1b"
+      availability_zone = "us-west-2b"
       cidr_block        = "192.168.32.0/19"
     }
   }
@@ -26,11 +26,11 @@ module "base-network" {
 
   private_subnets = {
     first_private_subnet = {
-      availability_zone = "us-east-1a"
+      availability_zone = "us-west-2a"
       cidr_block        = "192.168.128.0/19"
     }
     second_private_subnet = {
-      availability_zone = "us-east-1b"
+      availability_zone = "us-west-2b"
       cidr_block        = "192.168.160.0/19"
     }
   }
@@ -39,4 +39,14 @@ module "base-network" {
     private_subnet_tag1 = "tag1",
     private_subnet_tag2 = "tag2",
   }
+}
+
+module "app" {
+  source = "./modules/app"
+
+  storage_performance_mode    = "generalPurpose"
+  storage_throughput_mode     = "elastic"
+  storage_throughput_in_mibps = 0
+  vpc_id                      = module.base-network.vpc_id
+  subnet_ids                  = [for subnet in module.base-network.private_subnets : subnet.id]
 }
