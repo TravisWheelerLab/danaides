@@ -50,6 +50,7 @@ module "app" {
   vpc_id                      = module.base-network.vpc_id
   # TODO: can I consoilidate subnet_ids and cidr_blocks into a single variable?
   #       Any disparity between the two lists could cause issues
-  subnet_ids                  = [for subnet in module.base-network.private_subnets : subnet.id]
-  cidr_blocks                 = [for subnet in module.base-network.private_subnets : subnet.cidr_block]
+  subnet_ids         = [for subnet in module.base-network.private_subnets : subnet.id]
+  cidr_blocks        = [for subnet in module.base-network.private_subnets : subnet.cidr_block]
+  efs_lambda_timeout = 90
 }
