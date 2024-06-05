@@ -1,18 +1,18 @@
 data "archive_file" "lambda_zip" {
   type        = "zip"
-  source_file  = "${path.module}/efs_handler/index.py" # TODO: Store this path in a variable
+  source_file = "${path.module}/efs_handler/index.py"    # TODO: Store this path in a variable
   output_path = "${path.module}/archives/efs_lambda.zip" # TODO: Store this path in a variable
 }
 
 resource "aws_lambda_function" "lambda_efs" {
-  function_name = "lambda"
-  role          = aws_iam_role.lambda_efs_role.arn
-  handler       = "index.lambda_handler"
-  runtime       = "python3.8"
-  filename      = "${path.module}/archives/efs_lambda.zip" # TODO: Store this path in a variable
+  function_name    = "lambda"
+  role             = aws_iam_role.lambda_efs_role.arn
+  handler          = "index.lambda_handler"
+  runtime          = "python3.8"
+  filename         = "${path.module}/archives/efs_lambda.zip" # TODO: Store this path in a variable
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  timeout       = 60
-  memory_size   = 128
+  timeout          = var.efs_lambda_timeout
+  memory_size      = 128
   tracing_config {
     mode = "Active"
   }
