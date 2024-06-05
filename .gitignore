@@ -5,4 +5,4 @@ danaides.code-workspace
 terraform.tfstate*
 .vscode
 .bastion*
-**.zip
+modules/app/archives/
