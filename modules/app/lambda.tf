@@ -29,7 +29,7 @@ resource "aws_lambda_function" "lambda_efs" {
     subnet_ids         = var.subnet_ids
     security_group_ids = [aws_security_group.efs_sg.id]
   }
-  depends_on = [aws_efs_mount_target.efs_mount_target]
+  depends_on = [aws_efs_mount_target.alpha]
 }
 
 # Compare this snippet from lambda.tf:

@@ -24,3 +24,8 @@ variable "subnet_ids" {
   type = list(string)
   description = "The IDs of the subnets to create the EFS mount targets in"
 }
+
+variable "cidr_blocks" {
+  type = list(string)
+  description = "The CIDR blocks to allow NFS traffic from"
+}

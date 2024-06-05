@@ -48,5 +48,8 @@ module "app" {
   storage_throughput_mode     = "elastic"
   storage_throughput_in_mibps = 0
   vpc_id                      = module.base-network.vpc_id
+  # TODO: can I consoilidate subnet_ids and cidr_blocks into a single variable?
+  #       Any disparity between the two lists could cause issues
   subnet_ids                  = [for subnet in module.base-network.private_subnets : subnet.id]
+  cidr_blocks                 = [for subnet in module.base-network.private_subnets : subnet.cidr_block]
 }
