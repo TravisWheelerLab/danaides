@@ -54,3 +54,14 @@ module "app" {
   cidr_blocks        = [for subnet in module.base-network.private_subnets : subnet.cidr_block]
   efs_lambda_timeout = 90
 }
+
+module "bastion" {
+  source = "./modules/bastion"
+
+  vpc_id            = module.base-network.vpc_id
+  public_subnet_id  = module.base-network.public_subnets.first_public_subnet.id
+  private_subnet_id = module.base-network.private_subnets.first_private_subnet.id
+  private_key       = "${path.module}/.bastion_key"
+  public_key        = "${path.module}/.bastion_key.pub"
+  efs_dns_name      = module.app.efs_dns_name
+}
