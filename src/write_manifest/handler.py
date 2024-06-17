@@ -2,11 +2,11 @@ import io
 import os
 import csv
 import json
+import logging
 from pathlib import Path
 from io import StringIO
 
 import boto3
-import logging
 
 # Set up logging
 logger = logging.getLogger()
@@ -20,7 +20,6 @@ EFS_PATH = Path(os.environ['EFS_PATH'])
 # Create S3 client
 # (It is best practice for boto3 clients be set at global scope)
 s3_client = boto3.client('s3')
-
 
 def generate_manifest_data(object_size_bytes: int, block_size_bytes: int) -> StringIO:
 
@@ -51,27 +50,44 @@ def touch_efs_file(object_key: str):
         pass # TODO: write space?
 
 
+def assert_source_bucket_region(bucket_name: str):
+    # Check if the bucket exists in the same region as this lambda 
+    # (This is a best practice for performance)
+    bucket_region = s3_client.get_bucket_location(Bucket=bucket_name)['LocationConstraint']
+    current_region = os.environ['AWS_REGION']
+    if bucket_region != current_region:
+        raise ValueError(f"Bucket {bucket_name} is in a different region ({bucket_region}) than this lambda ({current_region})")
+
+
 def lambda_handler(event, context):
     logger.info('Event: %s', event)
 
-    # TODO: Validate that the bucket is in the same region as the VPC, else fail
     bucket_name = event['bucketName']
     object_key = event['objectKey']
     block_size_bytes = BLOCK_SIZE_MB * 1024 * 1024
     logger.info('Bucket: %s, Object: %s, Block size: %s', bucket_name, object_key, block_size_bytes)
 
+    # Ensure bucket exists in the same region as the application
+    try:
+        assert_source_bucket_region(bucket_name)
+    except ValueError as e:
+        logger.error('Error: %s', e)
+        return {
+            'statusCode': 400,
+            'body': str(e),
+        }
     # Get the size of the S3 object
     logger.info('Getting object size in S3')
     response = s3_client.head_object(Bucket=bucket_name, Key=object_key)
     logger.info('Response: %s', response)
-    
+
     object_size_bytes = int(response['ContentLength'])
     logger.info('Object size: %s', object_size_bytes)
 
     # Generate manifest file
     logger.info('Generating manifest file')
     csv_data = generate_manifest_data(object_size_bytes, block_size_bytes)
-    
+
     print("Uploading to s3")
     # Upload the CSV file to S3
     manifest_object_key = f"manifests/{object_key}.csv"
@@ -84,3 +100,4 @@ def lambda_handler(event, context):
             'manifestObjectKey': manifest_object_key,
         }),
     }
+
