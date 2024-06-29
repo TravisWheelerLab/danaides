@@ -68,6 +68,7 @@ Resources:
                 - !GetAtt FetchBlockFunctionRole.Arn
                 - !GetAtt WriteManifestFunctionRole.Arn
                 - !GetAtt PollQueueFunctionRole.Arn
+                - !GetAtt TouchFileFunctionRole.Arn
 
   PrivateRouteTable1:
     Type: AWS::EC2::RouteTable
@@ -110,6 +111,7 @@ Resources:
 
   LambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    # TODO: Validate that the bucket is in the same region as the VPC, else fail
     Properties:
       GroupDescription: Lambda on SAM Security Group
       VpcId: !Ref EfsLambdaVpc
@@ -157,6 +159,7 @@ Resources:
     Properties:
       DefinitionUri: statemachine.asl.json
       DefinitionSubstitutions:
+        TouchFileFunctionArn: !GetAtt TouchFileFunction.Arn
         WriteManifestFunctionArn: !GetAtt WriteManifestFunction.Arn
         BlockQueueUrl: BlockQueue
         PollQueueFunctionArn: !GetAtt PollQueueFunction.Arn
@@ -219,7 +222,7 @@ Resources:
             BatchSize: 10
       Environment:
         Variables:
-          EFS_MOUNT_PATH: !Ref EfsLambdaMountPath
+          EFS_PATH: !Ref EfsLambdaMountPath
 
   BlockQueue:
     Type: AWS::SQS::Queue
@@ -257,7 +260,38 @@ Resources:
         Variables:
           MANIFEST_BUCKET_NAME: !Ref S3Bucket 
           BLOCK_SIZE_MB: 16
-          EFS_MOUNT_PATH: !Ref EfsLambdaMountPath
+          EFS_PATH: !Ref EfsLambdaMountPath
+
+  TouchFileFunction:
+    Type: AWS::Serverless::Function
+    DependsOn:
+    - MountTargetA
+    - MountTargetB
+    Properties:
+      Timeout: 30  # TODO - Set this in config?
+      CodeUri: src/touch_file/
+      Handler: handler.lambda_handler
+      Runtime: python3.9
+      Architectures:
+      - x86_64
+      Policies:
+      - EFSWriteAccessPolicy:
+          FileSystem: !Ref EfsFileSystem
+          AccessPoint: !Ref AccessPoint
+      - S3FullAccessPolicy:
+          BucketName: "*"
+      VpcConfig:
+        SecurityGroupIds:
+        - !Ref LambdaSecurityGroup
+        SubnetIds:
+        - !Ref EfsLambdaSubnetA
+        - !Ref EfsLambdaSubnetB
+      FileSystemConfigs:
+      - Arn: !GetAtt AccessPoint.Arn
+        LocalMountPath: !Ref EfsLambdaMountPath
+      Environment:
+        Variables:
+          EFS_PATH: !Ref EfsLambdaMountPath
 
   PollQueueFunction:
     Type: AWS::Serverless::Function
@@ -286,7 +320,7 @@ Resources:
       Environment:
         Variables:
           BLOCK_QUEUE_URL: BlockQueue
-          EFS_MOUNT_PATH: !Ref EfsLambdaMountPath
+          EFS_PATH: !Ref EfsLambdaMountPath
 
   ApplicationResourceGroup:
     Type: AWS::ResourceGroups::Group
