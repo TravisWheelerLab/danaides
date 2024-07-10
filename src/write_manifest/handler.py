@@ -52,7 +52,7 @@ def assert_source_bucket_region(bucket_name: str):
     if bucket_region != current_region:
         raise ValueError(
             # string that spans two lines
-            f"Bucket {bucket_name} is in a different region ({bucket_region}) " +
+            f"Bucket {bucket_name} is in a different region ({bucket_region}) " + \
             "than this lambda ({current_region})"
         )
 
