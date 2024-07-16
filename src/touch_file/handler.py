@@ -13,7 +13,10 @@ def touch_efs_file(object_key: str):
         pass  # TODO: write space?
 
 
-def handler(event, context):
-    object_key = event["object_key"]
+def lambda_handler(event, context):
+    object_key = event["objectKey"]
     touch_efs_file(object_key)
-    return {"statusCode": 200, "body": "OK"}
+    return {
+        "statusCode": 200,
+        "body": {"bucketName": event["bucketName"], "objectKey": object_key},
+    }
