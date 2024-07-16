@@ -16,7 +16,6 @@ logger.setLevel(logging.INFO)
 # Set constants from environment variables
 MANIFEST_BUCKET_NAME = os.environ["MANIFEST_BUCKET_NAME"]
 BLOCK_SIZE_MB = int(os.environ["BLOCK_SIZE_MB"])
-EFS_PATH = Path(os.environ["EFS_PATH"])
 
 # Create S3 client
 # (It is best practice for boto3 clients be set at global scope)
@@ -52,8 +51,8 @@ def assert_source_bucket_region(bucket_name: str):
     if bucket_region != current_region:
         raise ValueError(
             # string that spans two lines
-            f"Bucket {bucket_name} is in a different region ({bucket_region}) " + \
-            "than this lambda ({current_region})"
+            f"Bucket {bucket_name} is in a different region ({bucket_region}) "
+            + "than this lambda ({current_region})"
         )
 
 
@@ -100,10 +99,8 @@ def lambda_handler(event, context):
 
     return {
         "statusCode": 200,
-        "body": json.dumps(
-            {
-                "manifestBucketName": MANIFEST_BUCKET_NAME,
-                "manifestObjectKey": manifest_object_key,
-            }
-        ),
+        "body": {
+            "manifestBucketName": MANIFEST_BUCKET_NAME,
+            "manifestObjectKey": manifest_object_key,
+        },
     }
