@@ -1,74 +1,129 @@
 {
-  "Comment": "A Hello World example demonstrating various state types of the Amazon States Language. It is composed of flow control states only, so it does not need resources to run.",
-  "StartAt": "Pass",
+  "Comment": "Workflow to orchestrate serverless data migration",
+  "StartAt": "Touch File",
   "States": {
-    "Pass": {
-      "Comment": "A Pass state passes its input to its output, without performing work. They can also generate static JSON output, or transform JSON input using filters and pass the transformed data to the next state. Pass states are useful when constructing and debugging state machines.",
-      "Type": "Pass",
-      "Result": {
-        "IsHelloWorldExample": true
+    "Touch File": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$.Payload.body",
+      "Parameters": {
+        "Payload.$": "$",
+        "FunctionName": "${TouchFileFunctionArn}"
       },
-      "Next": "Hello World example?"
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 1,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Write Manifest"
     },
-    "Hello World example?": {
-      "Comment": "A Choice state adds branching logic to a state machine. Choice rules can implement many different comparison operators, and rules can be combined using And, Or, and Not",
+    "Write Manifest": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "OutputPath": "$.Payload.body",
+      "Parameters": {
+        "Payload.$": "$",
+        "FunctionName": "${WriteManifestFunctionArn}"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 1,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Read Manifest"
+    },
+    "Read Manifest": {
+      "Type": "Map",
+      "ItemProcessor": {
+        "ProcessorConfig": {
+          "Mode": "DISTRIBUTED",
+          "ExecutionType": "EXPRESS"
+        },
+        "StartAt": "SQS SendMessage",
+        "States": {
+          "SQS SendMessage": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::sqs:sendMessage",
+            "Parameters": {
+              "MessageBody.$": "$",
+              "QueueUrl": "${BlockQueueUrl}"
+            },
+            "End": true
+          }
+        }
+      },
+      "ItemReader": {
+        "Resource": "arn:aws:states:::s3:getObject",
+        "ReaderConfig": {
+          "InputType": "CSV",
+          "CSVHeaderLocation": "FIRST_ROW"
+        },
+        "Parameters": {
+          "Bucket.$": "$.manifestBucketName",
+          "Key.$": "$.manifestObjectKey"
+        }
+      },
+      "MaxConcurrency": 1000,
+      "Label": "ReadManifest",
+      "Next": "Wait 3 Seconds"
+    },
+    "Wait 3 Seconds": {
+      "Type": "Wait",
+      "Next": "Check Queue Empty",
+      "Seconds": 3
+    },
+    "Check Queue Empty": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "Payload.$": "$",
+        "FunctionName": "${PollQueueFunctionArn}"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.AWSLambdaException",
+            "Lambda.SdkClientException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 1,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "Next": "Job Complete?"
+    },
+    "Job Complete?": {
       "Type": "Choice",
       "Choices": [
         {
-          "Variable": "$.IsHelloWorldExample",
+          "Variable": "$.Payload.body.queueEmpty",
           "BooleanEquals": true,
-          "Next": "Yes"
+          "Next": "Success"
         },
-        {
-          "Variable": "$.IsHelloWorldExample",
-          "BooleanEquals": false,
-          "Next": "No"
-        }
-      ],
-      "Default": "Yes"
-    },
-    "Yes": {
-      "Type": "Pass",
-      "Next": "Wait 3 sec"
-    },
-    "No": {
-      "Type": "Fail",
-      "Cause": "Not Hello World"
-    },
-    "Wait 3 sec": {
-      "Comment": "A Wait state delays the state machine from continuing for a specified time.",
-      "Type": "Wait",
-      "Seconds": 3,
-      "Next": "Parallel State"
-    },
-    "Parallel State": {
-      "Comment": "A Parallel state can be used to create parallel branches of execution in your state machine.",
-      "Type": "Parallel",
-      "Next": "Hello World",
-      "Branches": [
-        {
-          "StartAt": "Hello",
-          "States": {
-            "Hello": {
-              "Type": "Pass",
-              "End": true
-            }
-          }
-        },
-        {
-          "StartAt": "World",
-          "States": {
-            "World": {
-              "Type": "Pass",
-              "End": true
-            }
-          }
-        }
+        {"Variable": "$.Payload.body.queueEmpty", "BooleanEquals": false, "Next": "Wait 3 Seconds"}
       ]
     },
-    "Hello World": {
-      "Type": "Pass",
-      "End": true
-    }
+  "Success": {
+    "Type": "Succeed"
+  }
   }
 }
+
