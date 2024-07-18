@@ -28,7 +28,7 @@
     "Write Manifest": {
       "Type": "Task",
       "Resource": "arn:aws:states:::lambda:invoke",
-      "OutputPath": "$.Payload.body",
+      "ResultPath": "$.Payload.body",
       "Parameters": {
         "Payload.$": "$",
         "FunctionName": "${WriteManifestFunctionArn}"
@@ -46,9 +46,10 @@
           "BackoffRate": 2
         }
       ],
-      "Next": "Read Manifest"
+      "ResultPath": "$.output",
+      "Next": "Fan Out Messages"
     },
-    "Read Manifest": {
+    "Fan Out Messages": {
       "Type": "Map",
       "ItemProcessor": {
         "ProcessorConfig": {
@@ -75,9 +76,15 @@
           "CSVHeaderLocation": "FIRST_ROW"
         },
         "Parameters": {
-          "Bucket.$": "$.manifestBucketName",
-          "Key.$": "$.manifestObjectKey"
+          "Bucket.$": "$.output.Payload.body.manifestBucketName",
+          "Key.$": "$.output.Payload.body.manifestObjectKey"
         }
+      },
+      "ItemSelector": {
+        "sourceBucketName.$": "$.bucketName",
+        "sourceObjectKey.$": "$.objectKey",
+        "startByte.$": "$$.Map.Item.Value.startByte",
+        "endByte.$": "$$.Map.Item.Value.endByte"
       },
       "MaxConcurrency": 1000,
       "Label": "ReadManifest",
@@ -118,7 +125,11 @@
           "BooleanEquals": true,
           "Next": "Success"
         },
-        {"Variable": "$.Payload.body.queueEmpty", "BooleanEquals": false, "Next": "Wait 3 Seconds"}
+        {
+          "Variable": "$.Payload.body.queueEmpty",
+          "BooleanEquals": false,
+          "Next": "Wait 3 Seconds"
+        }
       ]
     },
   "Success": {
