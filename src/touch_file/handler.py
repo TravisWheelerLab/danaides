@@ -1,5 +1,9 @@
+import logging
 import os
 from pathlib import Path
+
+logger = logging.getLogger()
+logger.setLevel("INFO")
 
 EFS_PATH = Path(os.environ["EFS_PATH"])
 
