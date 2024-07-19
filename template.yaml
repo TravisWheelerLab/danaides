@@ -1,0 +1,341 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  efs-lambda
+
+  Template for data migration from s3 to EFS.
+
+Globals:
+  Function:
+    Timeout: 3
+
+    Tracing: Active
+  Api:
+    TracingEnabled: true
+
+Parameters:
+  EfsLambdaMountPath:
+    Type: String
+    Default: /mnt/efs
+    Description: The path where the EFS volume will be mounted in the Lambda function
+
+Resources:
+  S3Bucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "sam-efs-lambda-${AWS::AccountId}-${AWS::Region}"
+
+  EfsLambdaVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+
+  EfsLambdaSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref EfsLambdaVpc
+      AvailabilityZone: !Select [0, !GetAZs '']
+      CidrBlock: 10.0.3.0/24
+
+  EfsLambdaSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref EfsLambdaVpc
+      AvailabilityZone: !Select [1, !GetAZs '']
+      CidrBlock: 10.0.4.0/24
+  # S3 VPC Endpoint
+  S3VpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      RouteTableIds:
+        - !Ref PrivateRouteTable1
+        - !Ref PrivateRouteTable2
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.s3"
+      VpcId: !Ref EfsLambdaVpc
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal: "*"
+            Action: "*"
+            Resource: "*"
+          - Effect: Allow
+            Principal:
+              AWS:
+                - !GetAtt FetchBlockFunctionRole.Arn
+                - !GetAtt WriteManifestFunctionRole.Arn
+                - !GetAtt PollQueueFunctionRole.Arn
+                - !GetAtt TouchFileFunctionRole.Arn
+
+  SQSVpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcEndpointType: "Interface"
+      ServiceName: !Sub "com.amazonaws.${AWS::Region}.sqs"
+      SubnetIds:
+        - !Ref EfsLambdaSubnetA
+        - !Ref EfsLambdaSubnetB
+      VpcId: !Ref EfsLambdaVpc
+      SecurityGroupIds:
+        - !Ref LambdaSecurityGroup
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS:
+                - !GetAtt PollQueueFunctionRole.Arn
+            Action:
+              - "sqs:*"
+            Resource: "*"
+
+  PrivateRouteTable1:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref EfsLambdaVpc
+
+  PrivateRouteTable2:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref EfsLambdaVpc
+
+  # Route table association for EFS Lambda VPC
+  EfsLambdaRouteTableAssociationA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref EfsLambdaSubnetA
+      RouteTableId: !Ref PrivateRouteTable1
+
+  EfsLambdaRouteTableAssociationB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref EfsLambdaSubnetB
+      RouteTableId: !Ref PrivateRouteTable2
+
+  EfsLambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: EFS + Lambda on SAM Security Group
+      VpcId: !Ref EfsLambdaVpc
+      SecurityGroupEgress:
+      - CidrIp: 0.0.0.0/0
+        FromPort: 0
+        ToPort: 65535
+        IpProtocol: tcp
+      SecurityGroupIngress:
+      - CidrIp: 0.0.0.0/0
+        FromPort: 0
+        ToPort: 65535
+        IpProtocol: tcp
+
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Lambda on SAM Security Group
+      VpcId: !Ref EfsLambdaVpc
+      SecurityGroupIngress:
+      - CidrIp: 10.0.0.0/16
+        IpProtocol: -1
+      SecurityGroupEgress:
+      - CidrIp: 10.0.0.0/16
+        IpProtocol: -1
+
+  EfsFileSystem:
+    Type: AWS::EFS::FileSystem
+
+  MountTargetA:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref EfsFileSystem
+      SubnetId: !Ref EfsLambdaSubnetA
+      SecurityGroups:
+      - !Ref EfsLambdaSecurityGroup
+
+  MountTargetB:
+    Type: AWS::EFS::MountTarget
+    Properties:
+      FileSystemId: !Ref EfsFileSystem
+      SubnetId: !Ref EfsLambdaSubnetB
+      SecurityGroups:
+      - !Ref EfsLambdaSecurityGroup
+
+  AccessPoint:
+    Type: AWS::EFS::AccessPoint
+    Properties:
+      FileSystemId: !Ref EfsFileSystem
+      PosixUser:
+        Gid: '1000'
+        Uid: '1000'
+      RootDirectory:
+        Path: /lambda
+        CreationInfo:
+          OwnerGid: '1000'
+          OwnerUid: '1000'
+          Permissions: '755'
+
+  StateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      DefinitionUri: statemachine.asl.json
+      DefinitionSubstitutions:
+        TouchFileFunctionArn: !GetAtt TouchFileFunction.Arn
+        WriteManifestFunctionArn: !GetAtt WriteManifestFunction.Arn
+        BlockQueueUrl: !Ref BlockQueue
+        PollQueueFunctionArn: !GetAtt PollQueueFunction.Arn
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action: # TODO: Refine permissions
+                - "cloudwatch:*"
+                - "logs:*"
+                - "lambda:*"
+                - "s3:*"
+                - "states:*" # NOTE: Necessary for Map state
+                - "sqs:*"
+              Resource: "*"
+
+  StartStateMachineFunction: 
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/start_sm/
+      Handler: handler.lambda_handler
+      Runtime: python3.9
+      Architectures:
+      - x86_64
+      Events:
+        HelloWorld:
+          Type: Api
+          Properties:
+            Path: /hello
+            Method: get
+      Environment:
+        Variables:
+          STATE_MACHINE_ARN: !GetAtt StateMachine.Arn
+
+  FetchBlockFunction:
+    Type: AWS::Serverless::Function
+    DependsOn:
+    - MountTargetA
+    - MountTargetB
+    Properties:
+      CodeUri: src/fetch_block/
+      Handler: handler.lambda_handler
+      Runtime: python3.9
+      Architectures:
+      - x86_64
+      Policies:
+      - EFSWriteAccessPolicy:
+          FileSystem: !Ref EfsFileSystem
+          AccessPoint: !Ref AccessPoint
+      VpcConfig:
+        SecurityGroupIds:
+        - !Ref EfsLambdaSecurityGroup
+        SubnetIds:
+        - !Ref EfsLambdaSubnetA
+        - !Ref EfsLambdaSubnetB
+      FileSystemConfigs:
+      - Arn: !GetAtt AccessPoint.Arn
+        LocalMountPath: !Ref EfsLambdaMountPath
+      Events:
+        ReadBlockPushEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt BlockQueue.Arn
+            BatchSize: 10
+      Environment:
+        Variables:
+          EFS_PATH: !Ref EfsLambdaMountPath
+
+  BlockQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "sam-efs-lambda-${AWS::AccountId}-${AWS::Region}"
+        
+  WriteManifestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Timeout: 30 # TODO: Set this in a config?
+      CodeUri: src/write_manifest/
+      Handler: handler.lambda_handler
+      Runtime: python3.9
+      Architectures:
+      - x86_64
+      Policies:
+      - S3FullAccessPolicy:
+          BucketName: "*" # TODO: Refine permissions
+      Environment:
+        Variables:
+          MANIFEST_BUCKET_NAME: !Ref S3Bucket 
+          BLOCK_SIZE_MB: 16
+
+  TouchFileFunction:
+    Type: AWS::Serverless::Function
+    DependsOn:
+    - MountTargetA
+    - MountTargetB
+    Properties:
+      Timeout: 30  # TODO - Set this in config?
+      CodeUri: src/touch_file/
+      Handler: handler.lambda_handler
+      Runtime: python3.9
+      Architectures:
+      - x86_64
+      Policies:
+      - EFSWriteAccessPolicy:
+          FileSystem: !Ref EfsFileSystem
+          AccessPoint: !Ref AccessPoint
+      - S3FullAccessPolicy:
+          BucketName: "*"
+      VpcConfig:
+        SecurityGroupIds:
+        - !Ref LambdaSecurityGroup
+        SubnetIds:
+        - !Ref EfsLambdaSubnetA
+        - !Ref EfsLambdaSubnetB
+      FileSystemConfigs:
+      - Arn: !GetAtt AccessPoint.Arn
+        LocalMountPath: !Ref EfsLambdaMountPath
+      Environment:
+        Variables:
+          EFS_PATH: !Ref EfsLambdaMountPath
+
+  PollQueueFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/poll_queue/
+      Handler: handler.lambda_handler
+      Runtime: python3.9
+      Architectures:
+      - x86_64
+      Policies:
+      - Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action: # TODO: Refine permissions
+              - "sqs:*"
+            Resource: "*"
+      Environment:
+        Variables:
+          BLOCK_QUEUE_URL: !Ref BlockQueue
+
+  ApplicationResourceGroup:
+    Type: AWS::ResourceGroups::Group
+    Properties:
+      Name:
+        Fn::Sub: ApplicationInsights-SAM-${AWS::StackName}
+      ResourceQuery:
+        Type: CLOUDFORMATION_STACK_1_0
+  ApplicationInsightsMonitoring:
+    Type: AWS::ApplicationInsights::Application
+    Properties:
+      ResourceGroupName:
+        Ref: ApplicationResourceGroup
+      AutoConfigurationEnabled: 'true'
+
+Outputs:
+  HelloEfsApi:
+    Description: API Gateway endpoint URL for Prod stage for Hello EFS function
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/hello/"
