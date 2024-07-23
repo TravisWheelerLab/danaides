@@ -1,10 +1,8 @@
 import csv
 import io
-import json
 import logging
 import os
 from io import StringIO
-from pathlib import Path
 
 import boto3
 
@@ -35,7 +33,7 @@ def generate_manifest_data(object_size_bytes: int, block_size_bytes: int) -> Str
     # Prepare the CSV data
     csv_data = io.StringIO()
     csv_writer = csv.writer(csv_data)
-    csv_writer.writerow(["start_byte", "end_byte"])
+    csv_writer.writerow(["startByte", "endByte"])
     csv_writer.writerows([[start_byte, end_byte] for start_byte, end_byte in blocks])
 
     return csv_data

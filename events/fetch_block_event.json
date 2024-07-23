@@ -1,0 +1,23 @@
+{
+    "Records": [
+        {
+            "messageId": "a2c95c95-6fbb-400b-903d-61787245d974",
+            "receiptHandle": "AQEBtyq+MTIOirr/EAKaw+wBL9uGMyvCWuyXM0Q8iZR3F/DInGQA/KpSX8fSkptOqo2lhBED1Bje1ZKdSSBFP52ydmde+dUIl9PWHftxUpe6gt9FbTdqEb2X5CfUMQ/ATY9/L3nAjEp4Vqba61Ht/M7d9bsbmXFx/JhR3qn34zy+4zO+5dYcKgWLpAaDadOxVMS11HlCY7XYzdK9sO
+ygHZb4XOss13tLZEsrXKBtRPGquVDOhvO0OVJSpEwgNlPASPoAkmp6HI1Yo8o6RPlRu9BDBnoItDHD+LEPBH0WcTWvZegoqoFSrhAWrw4IujskphdeQH79KLNALfcA3ZIrZ+susJo1RAFCzhlgDRJqRwpnvzLg3wJj3UQxUZeqxNWQOTz0y8OcabZRaZYzc9aPC8tvsSfik4pMkCrWlHmejolPNOE=",
+            "body": "{\"sourceBucketName\":\"efs-lambda-demo\",\"startByte\":\"0\",\"endByte\":\"4638689\",\"sourceObjectKey\":\"E.coli\"}",
+            "attributes": {
+                "ApproximateReceiveCount": "2",
+                "AWSTraceHeader": "Root=1-66993cb2-09adede784e98ac698e75e4e;Parent=7a38c7230441dfc9;Sampled=0",
+                "SentTimestamp": "1721318578313",
+                "SenderId": "AROAT5SFNWN2OXTLT4A6W:step-functions-express-5fe494fd",
+                "ApproximateFirstReceiveTimestamp": "1721318578314"
+            },
+            "messageAttributes": {},
+            "md5OfBody": "cfa6b93b981f8d93f596fbf32888617a",
+            "eventSource": "aws:sqs",
+            "eventSourceARN": "arn:aws:sqs:us-west-2:269654799220:sam-efs-lambda-269654799220-us-west-2",
+            "awsRegion": "us-west-2"
+        }
+    ]
+}
+

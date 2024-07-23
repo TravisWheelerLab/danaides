@@ -58,38 +58,9 @@ Resources:
         Version: 2012-10-17
         Statement:
           - Effect: Allow
-            Principal: "*"
             Action: "*"
             Resource: "*"
-          - Effect: Allow
-            Principal:
-              AWS:
-                - !GetAtt FetchBlockFunctionRole.Arn
-                - !GetAtt WriteManifestFunctionRole.Arn
-                - !GetAtt PollQueueFunctionRole.Arn
-                - !GetAtt TouchFileFunctionRole.Arn
-
-  SQSVpcEndpoint:
-    Type: AWS::EC2::VPCEndpoint
-    Properties:
-      VpcEndpointType: "Interface"
-      ServiceName: !Sub "com.amazonaws.${AWS::Region}.sqs"
-      SubnetIds:
-        - !Ref EfsLambdaSubnetA
-        - !Ref EfsLambdaSubnetB
-      VpcId: !Ref EfsLambdaVpc
-      SecurityGroupIds:
-        - !Ref LambdaSecurityGroup
-      PolicyDocument:
-        Version: 2012-10-17
-        Statement:
-          - Effect: Allow
-            Principal:
-              AWS:
-                - !GetAtt PollQueueFunctionRole.Arn
-            Action:
-              - "sqs:*"
-            Resource: "*"
+            Principal: "*"
 
   PrivateRouteTable1:
     Type: AWS::EC2::RouteTable
@@ -117,30 +88,22 @@ Resources:
   EfsLambdaSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: EFS + Lambda on SAM Security Group
-      VpcId: !Ref EfsLambdaVpc
-      SecurityGroupEgress:
-      - CidrIp: 0.0.0.0/0
-        FromPort: 0
-        ToPort: 65535
-        IpProtocol: tcp
-      SecurityGroupIngress:
-      - CidrIp: 0.0.0.0/0
-        FromPort: 0
-        ToPort: 65535
-        IpProtocol: tcp
-
-  LambdaSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
       GroupDescription: Lambda on SAM Security Group
       VpcId: !Ref EfsLambdaVpc
-      SecurityGroupIngress:
-      - CidrIp: 10.0.0.0/16
-        IpProtocol: -1
-      SecurityGroupEgress:
-      - CidrIp: 10.0.0.0/16
-        IpProtocol: -1
+
+  EfsLambdaSecurityGroupEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref EfsLambdaSecurityGroup
+      IpProtocol: -1
+      CidrIp: 0.0.0.0/0
+
+  EfsLambdaSecurityGroupIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref EfsLambdaSecurityGroup
+      IpProtocol: -1
+      CidrIp: 0.0.0.0/0
 
   EfsFileSystem:
     Type: AWS::EFS::FileSystem
@@ -221,6 +184,7 @@ Resources:
     - MountTargetA
     - MountTargetB
     Properties:
+      Timeout: 30 # TODO: Set this in a config?
       CodeUri: src/fetch_block/
       Handler: handler.lambda_handler
       Runtime: python3.9
@@ -230,6 +194,8 @@ Resources:
       - EFSWriteAccessPolicy:
           FileSystem: !Ref EfsFileSystem
           AccessPoint: !Ref AccessPoint
+      - S3FullAccessPolicy:
+          BucketName: "*"
       VpcConfig:
         SecurityGroupIds:
         - !Ref EfsLambdaSecurityGroup
@@ -245,6 +211,9 @@ Resources:
           Properties:
             Queue: !GetAtt BlockQueue.Arn
             BatchSize: 10
+            MaximumBatchingWindowInSeconds: 5
+            FunctionResponseTypes:
+              - ReportBatchItemFailures
       Environment:
         Variables:
           EFS_PATH: !Ref EfsLambdaMountPath
@@ -252,7 +221,17 @@ Resources:
   BlockQueue:
     Type: AWS::SQS::Queue
     Properties:
+      VisibilityTimeout: 60
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt BlockQueueDLQ.Arn
+        maxReceiveCount: 3
       QueueName: !Sub "sam-efs-lambda-${AWS::AccountId}-${AWS::Region}"
+
+  BlockQueueDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "sam-efs-lambda-dlq-${AWS::AccountId}-${AWS::Region}"
+      VisibilityTimeout: 180
         
   WriteManifestFunction:
     Type: AWS::Serverless::Function
@@ -277,7 +256,7 @@ Resources:
     - MountTargetA
     - MountTargetB
     Properties:
-      Timeout: 30  # TODO - Set this in config?
+      Timeout: 30  # TODO: Set this in in config?
       CodeUri: src/touch_file/
       Handler: handler.lambda_handler
       Runtime: python3.9
@@ -287,11 +266,9 @@ Resources:
       - EFSWriteAccessPolicy:
           FileSystem: !Ref EfsFileSystem
           AccessPoint: !Ref AccessPoint
-      - S3FullAccessPolicy:
-          BucketName: "*"
       VpcConfig:
         SecurityGroupIds:
-        - !Ref LambdaSecurityGroup
+        - !Ref EfsLambdaSecurityGroup
         SubnetIds:
         - !Ref EfsLambdaSubnetA
         - !Ref EfsLambdaSubnetB
