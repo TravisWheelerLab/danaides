@@ -19,7 +19,7 @@ confirm_changeset = true
 resolve_s3 = true
 stack_name = "efs-lambda-app"
 s3_prefix = "efs-lambda-app"
-region = "us-west-2"
+region = "us-east-1"
 profile = "dev"
 image_repositories = []
 
