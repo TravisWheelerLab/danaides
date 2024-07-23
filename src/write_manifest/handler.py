@@ -45,12 +45,18 @@ def assert_source_bucket_region(bucket_name: str):
     bucket_region = s3_client.get_bucket_location(Bucket=bucket_name)[
         "LocationConstraint"
     ]
+    logger.info("Bucket region: %s", bucket_region)
     current_region = os.environ["AWS_REGION"]
+
+    # NOTE: This is a weird quirk of the S3 API. If the bucket is in us-east-1,
+    # the LocationConstrain will be None. However, the bucket is still in us-east-1.
+    bucket_region = "us-east-1" if bucket_region is None else bucket_region
+
     if bucket_region != current_region:
         raise ValueError(
             # string that spans two lines
             f"Bucket {bucket_name} is in a different region ({bucket_region}) "
-            + "than this lambda ({current_region})"
+            + f"than this lambda ({current_region})"
         )
 
 
