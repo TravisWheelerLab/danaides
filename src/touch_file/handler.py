@@ -12,9 +12,9 @@ def touch_efs_file(object_key: str):
     print("Priming file in EFS")
     # Priming file in EFS
     # (This allows downstream lambda to seek the file without checking if it exists)
-    target_filename = os.path.join(EFS_PATH, object_key)
-    with open(target_filename, "w+b") as _:
-        pass  # TODO: write space?
+    object_key_path = Path(EFS_PATH, object_key)
+    object_key_path.parent.mkdir(parents=True, exist_ok=True)
+    object_key_path.touch()
 
 
 def lambda_handler(event, context):

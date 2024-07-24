@@ -33,8 +33,8 @@ def lambda_handler(event, context):
         data = json.loads(message["body"])
         source_bucket_name = data["sourceBucketName"]
         source_object_key = data["sourceObjectKey"]
-        start_byte = data["startByte"]
-        end_byte = data["endByte"]
+        start_byte = int(data["startByte"])
+        end_byte = int(data["endByte"])
 
         logger.info(f"Source bucket: {source_bucket_name}")
         logger.info(f"Source object: {source_object_key}")
@@ -49,13 +49,24 @@ def lambda_handler(event, context):
                 Key=source_object_key,
                 Range=f"bytes={start_byte}-{end_byte}",
             )
-            logger.info("Response: %s", response)
+            data = response["Body"].read()
+            data_length = len(data)
+            logger.info(f"Fetched {data_length} bytes")
+
+            if data_length != (end_byte - start_byte + 1):
+                logger.warning(
+                    f"Expected {end_byte - start_byte + 1} bytes but got {data_length} bytes"
+                )
 
             # Write byte range to EFS
             logger.info("Writing byte range to EFS")
-            efs_file_path = os.path.join(EFS_PATH, source_object_key)
-            with open(efs_file_path, "w+b") as f:
-                f.write(response["Body"].read())
+            efs_file_path = EFS_PATH / source_object_key
+            with open(efs_file_path, "r+b") as f:
+                f.seek(start_byte)
+                f.write(data)
+                logger.info(
+                    f"Wrote {data_length} bytes to {efs_file_path} at position {start_byte}"
+                )
 
             logger.info("Finished processing message")
         except Exception as e:

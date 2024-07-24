@@ -282,6 +282,7 @@ Resources:
   PollQueueFunction:
     Type: AWS::Serverless::Function
     Properties:
+      Timeout: 30  # TODO: Set this in in config?
       CodeUri: src/poll_queue/
       Handler: handler.lambda_handler
       Runtime: python3.9
