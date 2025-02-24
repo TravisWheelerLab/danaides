@@ -20,7 +20,7 @@ resolve_s3 = true
 stack_name = "efs-lambda-app"
 s3_prefix = "efs-lambda-app"
 region = "us-east-1"
-profile = "dev"
+profile = "personal"
 image_repositories = []
 
 [default.package.parameters]
