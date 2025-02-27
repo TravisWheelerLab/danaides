@@ -88,7 +88,8 @@
       },
       "MaxConcurrency": 1000,
       "Label": "ReadManifest",
-      "Next": "Wait 3 Seconds"
+      "Next": "Wait 3 Seconds",
+      "ResultPath": null
     },
     "Wait 3 Seconds": {
       "Type": "Wait",
@@ -115,23 +116,33 @@
           "BackoffRate": 2
         }
       ],
-      "Next": "Job Complete?"
+      "Next": "Job Complete?",
+      "ResultPath": "$.output"
     },
     "Job Complete?": {
       "Type": "Choice",
       "Choices": [
         {
-          "Variable": "$.Payload.body.queueEmpty",
+          "Variable": "$.output.Payload.body.queueEmpty",
           "BooleanEquals": true,
-          "Next": "Success"
+          "Next": "Write to Processing Queue"
         },
         {
-          "Variable": "$.Payload.body.queueEmpty",
+          "Variable": "$.output.Payload.body.queueEmpty",
           "BooleanEquals": false,
           "Next": "Wait 3 Seconds"
         }
       ]
     },
+    "Write to Processing Queue": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sqs:sendMessage",
+      "Parameters": {
+        "MessageBody.$": "$",
+        "QueueUrl": "${ProcessingQueueUrl}"
+        },
+      "Next": "Success"
+      },
   "Success": {
     "Type": "Succeed"
   }

@@ -1,9 +1,7 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: >
-  efs-lambda
-
-  Template for data migration from s3 to EFS.
+  danaides - a serverless data processing pipeline
 
 Globals:
   Function:
@@ -146,6 +144,7 @@ Resources:
         TouchFileFunctionArn: !GetAtt TouchFileFunction.Arn
         WriteManifestFunctionArn: !GetAtt WriteManifestFunction.Arn
         BlockQueueUrl: !Ref BlockQueue
+        ProcessingQueueUrl: !Ref ProcessingQueue
         PollQueueFunctionArn: !GetAtt PollQueueFunction.Arn
       Policies:
         - Version: "2012-10-17"
@@ -231,6 +230,17 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub "sam-efs-lambda-dlq-${AWS::AccountId}-${AWS::Region}"
+      VisibilityTimeout: 180
+
+  ProcessingQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "sam-efs-lambda-processing-${AWS::AccountId}-${AWS::Region}"
+
+  ProcessingQueueDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "sam-efs-lambda-processing-dlq-${AWS::AccountId}-${AWS::Region}"
       VisibilityTimeout: 180
         
   WriteManifestFunction:
