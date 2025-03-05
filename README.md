@@ -1,4 +1,62 @@
 # danaides
+`danaides` is a serverless application that migrates data from an accessible S3 bucket to an Elastic File System mountable to several compute services available in the AWS ecosystem.
+
+The project is structured as follows:
+```bash 
+danaides
+├── README.md
+├── src/                   <-- Each sub-dir is a Lambda function
+│   └── fetch_block/
+│       ├── __init__.py
+│       ├── handler.py
+│       └── requirements.txt
+│   └── poll_queue/
+│       ├── __init__.py
+│       ├── handler.py
+│       └── requirements.txt
+│   └── start_sm/
+│       ├── __init__.py
+│       ├── handler.py
+│       └── requirements.txt
+│   └── touch_file/
+│       ├── __init__.py
+│       ├── handler.py
+│       └── requirements.txt
+│   └── write_manifest/
+│       ├── __init__.py
+│       ├── handler.py
+│       └── requirements.txt
+├── events/
+├── tests/
+├── __init__.py
+├── pytest.ini
+├── samconfig.toml         <-- SAM CLI deployment config file
+├── statemachine.asl.json  <-- Step Functions state machine definition
+└── template.yaml          <-- SAM template with all AWS infrastructure
+
+```
+
+
+The application is ran using the following sequence:
+1. Deploy the application using the AWS SAM CLI (documented below).
+2. Navigate to the AWS Step Functions console and click on the State Machine deployed by the application.
+3. Click on "start execution" and provide the following JSON input:
+```json
+{
+    "bucketName": "<BUCKET_NAME>", 
+    "objectKey": "<OBJECT_KEY>
+} 
+```
+For testing purposes, the following payload will migrate a 1GB file from a public S3 bucket:
+```json
+{
+    "bucketName": "commoncrawl", 
+    "objectKey": "crawl-data/CC-MAIN-2024-10/segments/1707947473347.0/warc/CC-MAIN-20240220211055-20240221001055-00883.warc.gz"
+} 
+```
+
+
+
 
 ## Deploy the danaides AWS application
 
